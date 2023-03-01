@@ -94,10 +94,12 @@ void spi_receive() {
     gpio_set_dir(PIN_SS, GPIO_IN);
     gpio_pull_up(PIN_SS);
 
+    ///*
     for (int i = 0; i < ENC_NUM; i++)
     {
         raw_val[i] = 0;
     }
+    //*/
 }
 
 void c_irq_handler(uint gpio, uint32_t events)
@@ -184,11 +186,10 @@ int main()
         for (int i = 0; i < ENC_NUM; i++)
         {
             // usb通信は遅いため，普段はコメントアウト
-            //cout << raw_val[i] << ",";
-            diff_val[i] = raw_val[i] - old_val[i];
-            old_val[i] = raw_val[i];
+            cout << raw_val[i] << ",";
+            raw_val[i] = 0;
         }
-        //cout << "\n";
+        cout << "\n";
         */
  
         sleep_ms(DELAY);
