@@ -16,9 +16,9 @@ using namespace std;
 #define ENC_NUM 8
 #define ENC_BYTES 2
 
-#define SPI_FREQ 400000
+#define SPI_FREQ 4000000
 
-#define DELAY 1
+#define DELAY_US 100
 
 // ピン番号をキーとするエンコーダ番号の辞書
 const map<int, int> Aenc = {
@@ -82,26 +82,6 @@ void callback_readPinB(int num)
     }
 }
 
-void spi_receive() {
-    gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
-    gpio_set_function(PIN_SS, GPIO_FUNC_SPI);
-
-    spi_write_blocking(SPI_PORT, (uint8_t*)raw_val, ENC_NUM*ENC_BYTES);
-
-    gpio_init(PIN_MISO);
-    gpio_set_dir(PIN_MISO, GPIO_IN);
-    gpio_init(PIN_SS);
-    gpio_set_dir(PIN_SS, GPIO_IN);
-    gpio_pull_up(PIN_SS);
-
-    ///*
-    for (int i = 0; i < ENC_NUM; i++)
-    {
-        raw_val[i] = 0;
-    }
-    //*/
-}
-
 void c_irq_handler(uint gpio, uint32_t events)
 {
     gpio_set_irq_enabled(gpio, GPIO_IRQ_EDGE_FALL, false); // 割り込み処理中は他の割り込み処理は不可
@@ -114,36 +94,22 @@ void c_irq_handler(uint gpio, uint32_t events)
     {
         callback_readPinB(Benc.at(gpio));
     }
-    else if (gpio == PIN_SS) // gpioはpinSSに設定されているか？
-    {
-        spi_receive();
-    }
 
     gpio_set_irq_enabled(gpio, GPIO_IRQ_EDGE_FALL, true);
 }
 
 void setup_SPI(void)
 {   
-    /*
-        スレーブ動作の際にSSがHIGHのときもMISOがLOWになってしまうSPIライブラリのバグがあるため，
-        MISOとSSをGPIOピンとして初期化し，SSの立ち下がりエッジで割り込み処理をしSPI通信を行う
-    */
-    //gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
-    //gpio_set_function(PIN_SS, GPIO_FUNC_SPI);
+    gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
+    gpio_set_function(PIN_SS, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCLK, GPIO_FUNC_SPI);
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
-    gpio_init(PIN_MISO);
-    gpio_set_dir(PIN_MISO, GPIO_IN);
-    gpio_init(PIN_SS);
-    gpio_set_dir(PIN_SS, GPIO_IN);
-    gpio_pull_up(PIN_SS);
 
     spi_init(SPI_PORT, SPI_FREQ); // 4MHz
     spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     // スレーブでSPI通信開始
     spi_set_slave(SPI_PORT, true);
 
-    gpio_set_irq_enabled_with_callback(PIN_SS, GPIO_IRQ_EDGE_FALL, true, c_irq_handler);
 }
 
 void setup_enc(int i)
@@ -182,17 +148,17 @@ int main()
 
     while (1)
     {   
-        /*
+        spi_write_blocking(SPI_PORT, (uint8_t*)raw_val, ENC_NUM*ENC_BYTES);
+
         for (int i = 0; i < ENC_NUM; i++)
         {
             // usb通信は遅いため，普段はコメントアウト
-            cout << raw_val[i] << ",";
+            //cout << raw_val[i] << ",";
             raw_val[i] = 0;
         }
-        cout << "\n";
-        */
+        //cout << "\n";
  
-        sleep_ms(DELAY);
+        sleep_us(DELAY_US);
     }
 
     return 0;
