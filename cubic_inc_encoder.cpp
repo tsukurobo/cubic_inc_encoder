@@ -18,7 +18,7 @@ using namespace std;
 
 #define SPI_FREQ 4000000
 
-#define DELAY_US 100
+#define DELAY_US 500
 
 // ピン番号をキーとするエンコーダ番号の辞書
 const map<int, int> Aenc = {
@@ -45,6 +45,7 @@ const int pinB[ENC_NUM] = {22, 25, 16, 19,  5,  8, 11, 14};
 const int pinZ[ENC_NUM] = {24, 27, 18, 21,  7, 10, 13,  4};
 // エンコーダを読んだ生の値
 int16_t raw_val[ENC_NUM] = {0, 0, 0, 0, 0, 0, 0, 0};
+// int raw_val[ENC_NUM] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 // 割り込み処理
 void callback_readPinA(int num)
@@ -58,7 +59,7 @@ void callback_readPinA(int num)
     }
     else
     {
-        if (gpio_get(num) == 0)
+        if (gpio_get(pinB[num]) == 0)
             ++raw_val[num];
         else
             --raw_val[num];
@@ -149,6 +150,7 @@ int main()
     while (1)
     {   
         spi_write_blocking(SPI_PORT, (uint8_t*)raw_val, ENC_NUM*ENC_BYTES);
+        //cout << raw_val[1] << endl;
 
         for (int i = 0; i < ENC_NUM; i++)
         {
