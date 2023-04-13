@@ -14,11 +14,11 @@ using namespace std;
 #define PIN_MOSI 0
 
 #define ENC_NUM 8
-#define ENC_BYTES 2
+#define ENC_BYTES 4
 
 #define SPI_FREQ 4000000
 
-#define DELAY_US 500
+#define DELAY_US 100
 
 // ピン番号をキーとするエンコーダ番号の辞書
 const map<int, int> Aenc = {
@@ -44,8 +44,7 @@ const int pinA[ENC_NUM] = {23, 26, 17, 20,  6,  9, 12, 15};
 const int pinB[ENC_NUM] = {22, 25, 16, 19,  5,  8, 11, 14};
 const int pinZ[ENC_NUM] = {24, 27, 18, 21,  7, 10, 13,  4};
 // エンコーダを読んだ生の値
-int16_t raw_val[ENC_NUM] = {0, 0, 0, 0, 0, 0, 0, 0};
-// int raw_val[ENC_NUM] = {0, 0, 0, 0, 0, 0, 0, 0};
+int32_t raw_val[ENC_NUM] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 // 割り込み処理
 void callback_readPinA(int num)
@@ -152,13 +151,15 @@ int main()
         spi_write_blocking(SPI_PORT, (uint8_t*)raw_val, ENC_NUM*ENC_BYTES);
         //cout << raw_val[1] << endl;
 
+        /*
         for (int i = 0; i < ENC_NUM; i++)
         {
             // usb通信は遅いため，普段はコメントアウト
-            //cout << raw_val[i] << ",";
-            raw_val[i] = 0;
+            // cout << raw_val[i] << ",";
+            // raw_val[i] = 0;
         }
-        //cout << "\n";
+        // cout << "\n";
+        */
  
         sleep_us(DELAY_US);
     }
