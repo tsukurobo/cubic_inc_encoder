@@ -20,6 +20,8 @@ using namespace std;
 
 #define DELAY_US 100
 
+bool rotation_dir = true;
+
 // ピン番号をキーとするエンコーダ番号の辞書
 const map<int, int> Aenc = {
     {23, 0},
@@ -39,12 +41,22 @@ const map<int, int> Benc = {
     {8,  5},
     {11, 6},
     {14, 7}};
+const map<int, int> Zenc = {
+    {24, 0},
+    {27, 1},
+    {18, 2},
+    {21, 3},
+    {7,  4},
+    {10, 5},
+    {13, 6},
+    {4,  7}};
+
 // エンコーダのピン設定
 const int pinA[ENC_NUM] = {23, 26, 17, 20,  6,  9, 12, 15};
 const int pinB[ENC_NUM] = {22, 25, 16, 19,  5,  8, 11, 14};
 const int pinZ[ENC_NUM] = {24, 27, 18, 21,  7, 10, 13,  4};
 // エンコーダを読んだ生の値
-int32_t raw_val[ENC_NUM] = {0, 0, 0, 0, 0, 0, 0, 0};
+int32_t raw_val[ENC_NUM * 2] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 // 割り込み処理
 void callback_readPinA(int num)
@@ -52,16 +64,28 @@ void callback_readPinA(int num)
     if (gpio_get(pinA[num]) == 0)
     {
         if (gpio_get(pinB[num]) == 0)
+        {
             --raw_val[num];
+            if (rotation_dir) rotation_dir = false;
+        }
         else
+        {
             ++raw_val[num];
+            if (!rotation_dir) rotation_dir = true;
+        }
     }
     else
     {
         if (gpio_get(pinB[num]) == 0)
+        {
             ++raw_val[num];
+            if (!rotation_dir) rotation_dir = true;
+        }
         else
+        {
             --raw_val[num];
+            if (rotation_dir) rotation_dir = false;
+        }
     }
 }
 void callback_readPinB(int num)
@@ -69,18 +93,38 @@ void callback_readPinB(int num)
     if (gpio_get(pinB[num]) == 0)
     {
         if (gpio_get(pinA[num]) == 0)
+        {
             ++raw_val[num];
+            if (!rotation_dir) rotation_dir = true;
+        }
         else
+        {
             --raw_val[num];
+            if (rotation_dir) rotation_dir = false;
+        }
     }
     else
     {
         if (gpio_get(pinA[num]) == 0)
+        {
             --raw_val[num];
+            if (rotation_dir) rotation_dir = false;
+        }
         else
+        {
             ++raw_val[num];
+            if (!rotation_dir) rotation_dir = true;
+        }
     }
 }
+void callback_readPinZ(int num)
+{
+    if (rotation_dir)
+        ++raw_val[num + 8];
+    if (!rotation_dir)
+        --raw_val[num + 8];
+}
+
 
 void c_irq_handler(uint gpio, uint32_t events)
 {
@@ -93,6 +137,10 @@ void c_irq_handler(uint gpio, uint32_t events)
     else if (Benc.find(gpio) != Benc.end()) // gpioはpinBに設定されているか？
     {
         callback_readPinB(Benc.at(gpio));
+    }
+    else if (Zenc.find(gpio) != Zenc.end()) // gpioはpinZに設定されているか？
+    {
+        callback_readPinZ(Zenc.at(gpio));
     }
 
     gpio_set_irq_enabled(gpio, GPIO_IRQ_EDGE_FALL, true);
@@ -117,10 +165,11 @@ void setup_enc(int i)
     // pinA,pinBを入出力ピンに設定
     gpio_set_function(pinA[i], GPIO_FUNC_SIO);
     gpio_set_function(pinB[i], GPIO_FUNC_SIO);
+    gpio_set_function(pinZ[i], GPIO_FUNC_SIO);
     // pinA,pinBを入力に設定
     gpio_set_dir(pinA[i], false);
     gpio_set_dir(pinB[i], false);
-
+    gpio_set_dir(pinZ[i], false);
     /* Encoder Callback*/
     /*
     event_mask
@@ -135,6 +184,7 @@ void setup_enc(int i)
     */
     gpio_set_irq_enabled_with_callback(pinA[i], GPIO_IRQ_EDGE_FALL, true, c_irq_handler);
     gpio_set_irq_enabled(pinB[i], GPIO_IRQ_EDGE_FALL, true);
+    gpio_set_irq_enabled(pinZ[i], GPIO_IRQ_EDGE_FALL, true);
 }
 
 int main()
@@ -148,8 +198,8 @@ int main()
 
     while (1)
     {   
-        spi_write_blocking(SPI_PORT, (uint8_t*)raw_val, ENC_NUM*ENC_BYTES);
-        //cout << raw_val[1] << endl;
+        spi_write_blocking(SPI_PORT, (uint8_t*)raw_val, ENC_NUM*ENC_BYTES*2);
+        //cout << raw_val[0] << "," << raw_val[8] << endl;
 
         /*
         for (int i = 0; i < ENC_NUM; i++)
