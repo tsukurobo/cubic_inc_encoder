@@ -199,7 +199,7 @@ int main()
     while (1)
     {   
         spi_write_blocking(SPI_PORT, (uint8_t*)raw_val, ENC_NUM*ENC_BYTES*2);
-        cout << raw_val[0] << "," << raw_val[8] << endl;
+        //cout << raw_val[0] << "," << raw_val[8] << endl;
 
         /*
         for (int i = 0; i < ENC_NUM; i++)
