@@ -21,7 +21,7 @@ using namespace std;
 #define DELAY_US 100
 
 bool rotation_dir = true;
-bool zenc_or_senser[ENC_NUM] = {true, true, true, true, true, true, true, true};
+bool is_zenc[ENC_NUM] = {true, true, true, true, true, true, true, true};
 
 // ピン番号をキーとするエンコーダ番号の辞書
 const map<int, int> Aenc = {
@@ -120,12 +120,12 @@ void callback_readPinB(int num)
 }
 void callback_readPinZ(int num)
 {
-    if (zenc_or_senser[num]) {
+    if (is_zenc[num]) {
         if (rotation_dir)
             ++raw_val[num + 8];
         if (!rotation_dir)
             --raw_val[num + 8];
-    } else if (!zenc_or_senser[num]) {
+    } else if (!is_zenc[num]) {
         cout << "Pusshing" << endl;
     }
 }
@@ -134,7 +134,7 @@ void callback_readPinZ(int num)
 
 void c_irq_handler(uint gpio, uint32_t events)
 {
-    gpio_set_irq_enabled(gpio, GPIO_IRQ_EDGE_FALL, false); // 割り込み処理中は他の割り込み処理は不可
+    gpio_set_irq_enabled(gpio, GPIO_IRQ_EDGE_RISE, false); // 割り込み処理中は他の割り込み処理は不可
 
     if (Aenc.find(gpio) != Aenc.end()) // gpioはpinAに設定されているか？
     {
@@ -149,7 +149,7 @@ void c_irq_handler(uint gpio, uint32_t events)
         callback_readPinZ(Zenc.at(gpio));
     }
 
-    gpio_set_irq_enabled(gpio, GPIO_IRQ_EDGE_FALL, true);
+    gpio_set_irq_enabled(gpio, GPIO_IRQ_EDGE_RISE, true);
 }
 
 void setup_SPI(void)
@@ -188,13 +188,13 @@ void setup_enc(int i)
     gpio_set_irq_enabled_with_callback()ではGPIOパラメータが無視され、
     設定したコールバック関数は全てのピンの割込呼出に対して呼び出される
     */
-    gpio_set_irq_enabled_with_callback(pinA[i], GPIO_IRQ_EDGE_FALL, true, c_irq_handler);
-    gpio_set_irq_enabled(pinB[i], GPIO_IRQ_EDGE_FALL, true);
+    gpio_set_irq_enabled_with_callback(pinA[i], GPIO_IRQ_EDGE_RISE, true, c_irq_handler);
+    gpio_set_irq_enabled(pinB[i], GPIO_IRQ_EDGE_RISE, true);
     if (gpio_get(pinZ[i]) == 1) {
-        gpio_set_irq_enabled(pinZ[i], GPIO_IRQ_EDGE_FALL, true);
+        gpio_set_irq_enabled(pinZ[i], GPIO_IRQ_EDGE_RISE, true);
     } else if (gpio_get(pinZ[i]) == 0) {
         gpio_set_irq_enabled(pinZ[i], GPIO_IRQ_EDGE_RISE, true);
-        zenc_or_senser[i] = false;
+        is_zenc[i] = false;
     }
 }
 
@@ -210,12 +210,12 @@ int main()
     while (1)
     {   
         spi_write_blocking(SPI_PORT, (uint8_t*)raw_val, ENC_NUM*ENC_BYTES*2);
-        cout << raw_val[0] << ", " << raw_val[8] << ", " << raw_val[1] << ", " << raw_val[9] << ", ";
-        if (zenc_or_senser[0]) cout << "Connecting Incriment encoder, ";
-        if (!zenc_or_senser[0]) cout << "Connecting Touch senser, ";
-        if (zenc_or_senser[1]) cout << "Connecting Incriment encoder" << endl;
-        if (!zenc_or_senser[1]) cout << "Connecting Touch senser" << endl;
-
+        /*cout << raw_val[0] << ", " << raw_val[8] << ", " << raw_val[1] << ", " << raw_val[9] << ", ";
+        if (is_zenc[0]) cout << "Connecting Incriment encoder, ";
+        if (!is_zenc[0]) cout << "Connecting Touch senser, ";
+        if (is_zenc[1]) cout << "Connecting Incriment encoder" << endl;
+        if (!is_zenc[1]) cout << "Connecting Touch senser" << endl;
+        */
         /*
         for (int i = 0; i < ENC_NUM; i++)
         {
