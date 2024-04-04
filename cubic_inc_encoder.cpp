@@ -20,7 +20,7 @@ using namespace std;
 
 #define DELAY_US 100
 
-bool rotation_dir = true;
+//bool rotation_dir = true;
 bool is_zenc[ENC_NUM] = {true, true, true, true, true, true, true, true};
 
 // ピン番号をキーとするエンコーダ番号の辞書
@@ -58,6 +58,7 @@ const int pinB[ENC_NUM] = {22, 25, 16, 19,  5,  8, 11, 14};
 const int pinZ[ENC_NUM] = {24, 27, 18, 21,  7, 10, 13,  4};
 // エンコーダを読んだ生の値
 int32_t raw_val[ENC_NUM * 2] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int raw_val_diff = 0;
 
 // 割り込み処理
 void callback_readPinA(int num)
@@ -67,12 +68,12 @@ void callback_readPinA(int num)
         if (gpio_get(pinB[num]) == 0)
         {
             --raw_val[num];
-            if (rotation_dir) rotation_dir = false;
+            //if (rotation_dir) rotation_dir = false;
         }
         else
         {
             ++raw_val[num];
-            if (!rotation_dir) rotation_dir = true;
+            //if (!rotation_dir) rotation_dir = true;
         }
     }
     else
@@ -80,12 +81,12 @@ void callback_readPinA(int num)
         if (gpio_get(pinB[num]) == 0)
         {
             ++raw_val[num];
-            if (!rotation_dir) rotation_dir = true;
+            //if (!rotation_dir) rotation_dir = true;
         }
         else
         {
             --raw_val[num];
-            if (rotation_dir) rotation_dir = false;
+            //if (rotation_dir) rotation_dir = false;
         }
     }
 }
@@ -96,12 +97,12 @@ void callback_readPinB(int num)
         if (gpio_get(pinA[num]) == 0)
         {
             ++raw_val[num];
-            if (!rotation_dir) rotation_dir = true;
+            //if (!rotation_dir) rotation_dir = true;
         }
         else
         {
             --raw_val[num];
-            if (rotation_dir) rotation_dir = false;
+            //if (rotation_dir) rotation_dir = false;
         }
     }
     else
@@ -109,25 +110,22 @@ void callback_readPinB(int num)
         if (gpio_get(pinA[num]) == 0)
         {
             --raw_val[num];
-            if (rotation_dir) rotation_dir = false;
+            //if (rotation_dir) rotation_dir = false;
         }
         else
         {
             ++raw_val[num];
-            if (!rotation_dir) rotation_dir = true;
+            //if (!rotation_dir) rotation_dir = true;
         }
     }
 }
 void callback_readPinZ(int num)
 {
     if (is_zenc[num]) {
-        if (rotation_dir)
-            ++raw_val[num + 8];
-        if (!rotation_dir)
-            --raw_val[num + 8];
-    } else if (!is_zenc[num]) {
-        cout << "Pusshing" << endl;
-    }
+        if (raw_val[num] - raw_val_diff > 0) ++raw_val[num + 8];
+        if (raw_val[num] - raw_val_diff < 0) --raw_val[num + 8];
+        raw_val_diff += raw_val[num];
+    } 
 }
 
 //スイッチB型、通常1、押してるとき0
@@ -190,11 +188,10 @@ void setup_enc(int i)
     */
     gpio_set_irq_enabled_with_callback(pinA[i], GPIO_IRQ_EDGE_RISE, true, c_irq_handler);
     gpio_set_irq_enabled(pinB[i], GPIO_IRQ_EDGE_RISE, true);
-    if (gpio_get(pinZ[i]) == 1) {
-        gpio_set_irq_enabled(pinZ[i], GPIO_IRQ_EDGE_RISE, true);
-    } else if (gpio_get(pinZ[i]) == 0) {
-        gpio_set_irq_enabled(pinZ[i], GPIO_IRQ_EDGE_RISE, true);
+    gpio_set_irq_enabled(pinZ[i], GPIO_IRQ_EDGE_RISE, true);
+    if (gpio_get(pinZ[i]) == 0) { //信号が0ならばタッチセンサ,1ならばインクリメントエンコーダー
         is_zenc[i] = false;
+        raw_val[i + 8] = 255; //8bit限界の値
     }
 }
 
@@ -209,8 +206,10 @@ int main()
 
     while (1)
     {   
-        spi_write_blocking(SPI_PORT, (uint8_t*)raw_val, ENC_NUM*ENC_BYTES*2);
-        /*cout << raw_val[0] << ", " << raw_val[8] << ", " << raw_val[1] << ", " << raw_val[9] << ", ";
+        spi_write_blocking(SPI_PORT, (uint8_t*)raw_val, ENC_NUM*ENC_BYTES*2); //32bitを8bit x ENC_BYTES==4回に分けて送信
+        //for (int i = 0; i < ENC_NUM; i++) if (!is_zenc[i]) raw_val[i] = gpio_get(pinZ[i]); //タッチセンサの信号を取得
+        /*
+        cout << raw_val[0] << ", " << raw_val[8] << ", " << raw_val[1] << ", " << raw_val[9] << ", ";
         if (is_zenc[0]) cout << "Connecting Incriment encoder, ";
         if (!is_zenc[0]) cout << "Connecting Touch senser, ";
         if (is_zenc[1]) cout << "Connecting Incriment encoder" << endl;
