@@ -15,6 +15,9 @@ using namespace std;
 
 #define ENC_NUM 8
 #define ENC_BYTES 4
+constexpr int32_t MAX_INT32 = 2147483647; //int32_t型の最大値
+// チャタリングインターバル(ms)
+#define CHATTERING_INTERVAL 50
 
 #define SPI_FREQ 4000000
 
@@ -59,6 +62,12 @@ const int pinZ[ENC_NUM] = {24, 27, 18, 21,  7, 10, 13,  4};
 // エンコーダを読んだ生の値
 int32_t raw_val[ENC_NUM * 2] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int raw_val_diff = 0;
+
+// 前回のスイッチ押下後のインターバル中かどうかを保存する配列
+bool is_interval[ENC_NUM] = {false, false, false, false, false, false, false, false};
+// インターバル中のカウント
+int interval_count[ENC_NUM] = {0, 0, 0, 0, 0, 0, 0, 0};
+
 
 // 割り込み処理
 void callback_readPinA(int num)
@@ -122,10 +131,21 @@ void callback_readPinB(int num)
 void callback_readPinZ(int num)
 {
     if (is_zenc[num]) {
+		// Z相信号がインクリメントエンコーダのものであった場合
         if (raw_val[num] - raw_val_diff > 0) ++raw_val[num + 8];
-        if (raw_val[num] - raw_val_diff < 0) --raw_val[num + 8];
+        else if (raw_val[num] - raw_val_diff < 0) --raw_val[num + 8];
         raw_val_diff += raw_val[num];
-    } 
+    } else {
+		// スイッチ、もしくは何も刺さっていない状態であった場合
+		if(is_interval[num] == true) {
+			// std::cout << "INTERVAL" << std::endl;
+			return;
+		} else{
+			// std::cout << "****pressed****" << std::endl;
+			raw_val[num + 8] == 0 ? raw_val[num + 8] = 1 : raw_val[num + 8] = 0;
+			is_interval[num] = true;
+		}
+	}
 }
 
 //スイッチB型、通常1、押してるとき0
@@ -189,9 +209,9 @@ void setup_enc(int i)
     gpio_set_irq_enabled_with_callback(pinA[i], GPIO_IRQ_EDGE_RISE, true, c_irq_handler);
     gpio_set_irq_enabled(pinB[i], GPIO_IRQ_EDGE_RISE, true);
     gpio_set_irq_enabled(pinZ[i], GPIO_IRQ_EDGE_RISE, true);
-    if (gpio_get(pinZ[i]) == 0) { //信号が0ならばタッチセンサ,1ならばインクリメントエンコーダー
+    if (gpio_get(pinZ[i]) == 0) { //起動時のZ相信号が0ならばタッチセンサか何も刺さっていない,1ならばインクリメントエンコーダ
         is_zenc[i] = false;
-        raw_val[i + 8] = 255; //8bit限界の値
+        raw_val[i + 8] = MAX_INT32; // タッチセンサ、もしくは何も刺さっていないときの値は最大値とする
     }
 }
 
@@ -207,7 +227,21 @@ int main()
     while (1)
     {   
         spi_write_blocking(SPI_PORT, (uint8_t*)raw_val, ENC_NUM*ENC_BYTES*2); //32bitを8bit x ENC_BYTES==4回に分けて送信
-        //for (int i = 0; i < ENC_NUM; i++) if (!is_zenc[i]) raw_val[i] = gpio_get(pinZ[i]); //タッチセンサの信号を取得
+        
+		// スイッチのチャタリング防止処理
+		const int interval = CHATTERING_INTERVAL * 10 / DELAY_US; // チャタリングインターバルをループカウント数に変換
+		for (int i = 0; i < ENC_NUM; i++) {
+			if(is_interval[i] == true) {
+				interval_count[i]++;
+				if(interval_count[i] >= interval) {
+					is_interval[i] = false;
+					interval_count[i] = 0;
+				}
+			}
+		}
+		// if(interval_count[6] > 0) std::cout << interval_count[6] << std::endl;
+		
+		//for (int i = 0; i < ENC_NUM; i++) if (!is_zenc[i]) raw_val[i] = gpio_get(pinZ[i]); //タッチセンサの信号を取得
         /*
         cout << raw_val[0] << ", " << raw_val[8] << ", " << raw_val[1] << ", " << raw_val[9] << ", ";
         if (is_zenc[0]) cout << "Connecting Incriment encoder, ";
