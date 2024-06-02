@@ -25,28 +25,28 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(cubic_inc_encoder cubic_inc_encoder.cpp )
+add_executable(${PROJECT_NAME} cubic_inc_encoder.cpp )
 
-pico_set_program_name(cubic_inc_encoder "cubic_inc_encoder")
-pico_set_program_version(cubic_inc_encoder "0.1")
+pico_set_program_name(${PROJECT_NAME} "cubic_inc_encoder")
+pico_set_program_version(${PROJECT_NAME} "0.1")
 
-pico_enable_stdio_uart(cubic_inc_encoder 0)
-pico_enable_stdio_usb(cubic_inc_encoder 1)
+pico_enable_stdio_uart(${PROJECT_NAME} 0)
+pico_enable_stdio_usb(${PROJECT_NAME} 1)
 
 # Add the standard library to the build
-target_link_libraries(cubic_inc_encoder
+target_link_libraries(${PROJECT_NAME}
         pico_stdlib)
 
 # Add the standard include files to the build
-target_include_directories(cubic_inc_encoder PRIVATE
+target_include_directories(${PROJECT_NAME} PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}
   ${CMAKE_CURRENT_LIST_DIR}/.. # for our common lwipopts or any other standard includes, if required
 )
 
 # Add any user requested libraries
-target_link_libraries(cubic_inc_encoder
+target_link_libraries(${PROJECT_NAME}
         hardware_spi
         )
 
-pico_add_extra_outputs(cubic_inc_encoder)
+pico_add_extra_outputs(${PROJECT_NAME})
 
