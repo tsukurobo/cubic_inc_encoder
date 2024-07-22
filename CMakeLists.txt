@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 # Initialise pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
-set(PICO_SDK_PATH "C:/code/pico/pico-sdk")
+set(PICO_SDK_PATH "C:/Program Files/Raspberry Pi/Pico SDK v1.5.1/pico-sdk")
 
 set(PICO_BOARD pico CACHE STRING "Board type")
 
@@ -35,7 +35,8 @@ pico_enable_stdio_usb(cubic_inc_encoder 1)
 
 # Add the standard library to the build
 target_link_libraries(cubic_inc_encoder
-        pico_stdlib)
+        pico_stdlib
+        pico_multicore)
 
 # Add the standard include files to the build
 target_include_directories(cubic_inc_encoder PRIVATE
