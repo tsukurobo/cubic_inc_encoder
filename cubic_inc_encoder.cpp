@@ -155,13 +155,28 @@ void core1_main() {
             readPinAB(i);
         }
     }
+    // コア０からデータを受け取ったらデータを送信
+    if (multicore_fifo_rvalid()) {
+        multicore_fifo_drain();
+        for (int i = 0; i < ENC_NUM * 2; i++) {
+            multicore_fifo_push_blocking(raw_val[i]);
+        }
+    }
 }
 
 // メインコアの処理、SPI通信によりマスターにデータを送信
 void core0_main() {
     setup_SPI();
     while (1) {
-        spi_write_blocking(SPI_PORT, (uint8_t *)raw_val,
+        // コア１からデータの受け取り
+        int32_t send_val[ENC_NUM * 2] = {0, 0, 0, 0, 0, 0, 0, 0,
+                                         0, 0, 0, 0, 0, 0, 0, 0};
+        multicore_fifo_push_blocking(1);
+        for (int i = 0; i < ENC_NUM * 2; i++) {
+            send_val[i] = multicore_fifo_pop_blocking();
+        }
+
+        spi_write_blocking(SPI_PORT, (uint8_t *)send_val,
                            ENC_NUM * ENC_BYTES * 2);
         // cout << raw_val[0] << "," << raw_val[8] << endl;
 
