@@ -1,6 +1,7 @@
 #include "hardware/spi.h"
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
+#include <cmath>
 #include <iostream>
 #include <map>
 #include <stdio.h>
@@ -36,12 +37,41 @@ const map<int, int> Zenc = {{24, 0}, {27, 1}, {18, 2}, {21, 3},
 const int pinA[ENC_NUM] = {23, 26, 17, 20, 6, 9, 12, 15};
 const int pinB[ENC_NUM] = {22, 25, 16, 19, 5, 8, 11, 14};
 const int pinZ[ENC_NUM] = {24, 27, 18, 21, 7, 10, 13, 4};
-// エンコーダを読んだ生の値
-int32_t raw_val[ENC_NUM * 2] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 // エンコーダーの過去の出力の値, 前半がA相で後半がB相
 uint8_t pre_gpio_status[ENC_NUM * 2] = {0, 0, 0, 0, 0, 0, 0, 0,
                                         0, 0, 0, 0, 0, 0, 0, 0};
+// エンコーダを読んだ生の値　コア１のみ利用
+int32_t raw_val[ENC_NUM * 2] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+// SPI通信で送るデータ　コア0のみ利用
+int32_t SPI_val[ENC_NUM * 2] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+// FIFOで転送する用のデータ コア０のみ利用
+// 前半の16項目が符号なしの数値　後半16個は前半の符号の有り無しを0と1で表現(0が符号なし、1が符号あり)
+uint32_t send_val[ENC_NUM * 4] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+// FIFOで受信する用のデータ コア０のみ利用
+// 前半の16項目が符号なしの数値　後半16個は前半の符号の有り無しを0と1で表現(0が符号なし、1が符号あり)
+uint32_t received_val[ENC_NUM * 4] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
+// raw_valをsend_valに変換する関数
+void raw_to_send() {
+    for (int i = 0; i < ENC_NUM * 2; i++) {
+        send_val[i] = abs(raw_val[i]);
+        if (raw_val[i] < 0) {
+            send_val[i] = 1;
+        } else {
+            send_val[i + 16] = 0;
+        }
+    }
+}
+// received_valをSPI_valに変換する関数
+void received_to_SPI() {
+    for (int i = 0; i < ENC_NUM * 2; i++) {
+        SPI_val[i] = received_val[i] * pow(-1, received_val[i + 16]);
+    }
+}
 // エンコーダーが正回転したとわかったときの処理
 void true_rotation_processing(int num) {
     ++raw_val[num];
@@ -150,6 +180,7 @@ void core1_main() {
     for (int i = 0; i < ENC_NUM; i++) {
         setup_enc(i);
     }
+    multicore_fifo_clear_irq();
     while (1) {
         for (int i = 0; i < ENC_NUM; i++) {
             readPinAB(i);
@@ -158,8 +189,9 @@ void core1_main() {
     // コア０からデータを受け取ったらデータを送信
     if (multicore_fifo_rvalid()) {
         multicore_fifo_drain();
-        for (int i = 0; i < ENC_NUM * 2; i++) {
-            multicore_fifo_push_blocking(raw_val[i]);
+        raw_to_send();
+        for (int i = 0; i < ENC_NUM * 4; i++) {
+            multicore_fifo_push_blocking(send_val[i]);
         }
     }
 }
@@ -167,16 +199,17 @@ void core1_main() {
 // メインコアの処理、SPI通信によりマスターにデータを送信
 void core0_main() {
     setup_SPI();
+    multicore_fifo_clear_irq();
     while (1) {
         // コア１からデータの受け取り
-        int32_t send_val[ENC_NUM * 2] = {0, 0, 0, 0, 0, 0, 0, 0,
-                                         0, 0, 0, 0, 0, 0, 0, 0};
-        multicore_fifo_push_blocking(1);
-        for (int i = 0; i < ENC_NUM * 2; i++) {
-            send_val[i] = multicore_fifo_pop_blocking();
+        uint32_t hoge = 1;
+        multicore_fifo_push_blocking(hoge);
+        for (int i = 0; i < ENC_NUM * 4; i++) {
+            SPI_val[i] = multicore_fifo_pop_blocking();
         }
+        received_to_SPI();
 
-        spi_write_blocking(SPI_PORT, (uint8_t *)send_val,
+        spi_write_blocking(SPI_PORT, (uint8_t *)SPI_val,
                            ENC_NUM * ENC_BYTES * 2);
         // cout << raw_val[0] << "," << raw_val[8] << endl;
 
