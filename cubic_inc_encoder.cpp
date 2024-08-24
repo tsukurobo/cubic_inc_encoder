@@ -207,21 +207,20 @@ void core0_main() {
 
     while (1) {
         // コア１からデータの受け取り
-        multicore_fifo_push_timeout_us(1, 0);
+        multicore_fifo_push_blocking(1);
         for (int i = 0; i < ENC_NUM * 4; i++) {
             received_val[i] = multicore_fifo_pop_blocking();
         }
         received_to_SPI();
 
-        // spi_write_blocking(SPI_PORT, (uint8_t *)SPI_val, ENC_NUM * ENC_BYTES
-        // * 2);
-        //  cout << raw_val[0] << "," << raw_val[8] << endl;
+        spi_write_blocking(SPI_PORT, (uint8_t *)SPI_val,
+                           ENC_NUM * ENC_BYTES * 2);
 
-        for (int i = 0; i < ENC_NUM * 2; i++) {
-            // usb通信は遅いため，普段はコメントアウト
-            cout << SPI_val[i] << ",";
-        }
-        cout << "\n";
+        // for (int i = 0; i < ENC_NUM * 2; i++) {
+        //     // usb通信は遅いため，普段はコメントアウト
+        //     cout << SPI_val[i] << ",";
+        // }
+        // cout << "\n";
 
         sleep_us(DELAY_US);
     }
