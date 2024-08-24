@@ -44,12 +44,12 @@ uint8_t pre_gpio_status[ENC_NUM * 2] = {0, 0, 0, 0, 0, 0, 0, 0,
 int32_t raw_val[ENC_NUM * 2] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 // SPI通信で送るデータ　コア0のみ利用
 int32_t SPI_val[ENC_NUM * 2] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-// FIFOで転送する用のデータ コア０のみ利用
+// FIFOで転送する用のデータ コア1のみ利用
 // 前半の16項目が符号なしの数値　後半16個は前半の符号の有り無しを0と1で表現(0が符号なし、1が符号あり)
 uint32_t send_val[ENC_NUM * 4] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                                   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                                   0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-// FIFOで受信する用のデータ コア０のみ利用
+// FIFOで受信する用のデータ コア0のみ利用
 // 前半の16項目が符号なしの数値　後半16個は前半の符号の有り無しを0と1で表現(0が符号なし、1が符号あり)
 uint32_t received_val[ENC_NUM * 4] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -60,7 +60,7 @@ void raw_to_send() {
     for (int i = 0; i < ENC_NUM * 2; i++) {
         send_val[i] = abs(raw_val[i]);
         if (raw_val[i] < 0) {
-            send_val[i] = 1;
+            send_val[i + 16] = 1;
         } else {
             send_val[i + 16] = 0;
         }
@@ -69,7 +69,10 @@ void raw_to_send() {
 // received_valをSPI_valに変換する関数
 void received_to_SPI() {
     for (int i = 0; i < ENC_NUM * 2; i++) {
-        SPI_val[i] = received_val[i] * pow(-1, received_val[i + 16]);
+        SPI_val[i] = received_val[i];
+        if (received_val[i + 16] == 1) {
+            SPI_val[i] = SPI_val[i] * (-1);
+        }
     }
 }
 // エンコーダーが正回転したとわかったときの処理
@@ -185,13 +188,14 @@ void core1_main() {
         for (int i = 0; i < ENC_NUM; i++) {
             readPinAB(i);
         }
-    }
-    // コア０からデータを受け取ったらデータを送信
-    if (multicore_fifo_rvalid()) {
-        multicore_fifo_drain();
-        raw_to_send();
-        for (int i = 0; i < ENC_NUM * 4; i++) {
-            multicore_fifo_push_blocking(send_val[i]);
+
+        // コア０からデータを受け取ったらデータを送信
+        if (multicore_fifo_rvalid()) {
+            multicore_fifo_drain();
+            raw_to_send();
+            for (int i = 0; i < ENC_NUM * 4; i++) {
+                multicore_fifo_push_blocking(send_val[i]);
+            }
         }
     }
 }
@@ -200,35 +204,30 @@ void core1_main() {
 void core0_main() {
     setup_SPI();
     multicore_fifo_clear_irq();
+
     while (1) {
         // コア１からデータの受け取り
-        uint32_t hoge = 1;
-        multicore_fifo_push_blocking(hoge);
+        multicore_fifo_push_timeout_us(1, 0);
         for (int i = 0; i < ENC_NUM * 4; i++) {
-            SPI_val[i] = multicore_fifo_pop_blocking();
+            received_val[i] = multicore_fifo_pop_blocking();
         }
         received_to_SPI();
 
-        spi_write_blocking(SPI_PORT, (uint8_t *)SPI_val,
-                           ENC_NUM * ENC_BYTES * 2);
-        // cout << raw_val[0] << "," << raw_val[8] << endl;
+        // spi_write_blocking(SPI_PORT, (uint8_t *)SPI_val, ENC_NUM * ENC_BYTES
+        // * 2);
+        //  cout << raw_val[0] << "," << raw_val[8] << endl;
 
-        /*
-        for (int i = 0; i < ENC_NUM; i++)
-        {
+        for (int i = 0; i < ENC_NUM * 2; i++) {
             // usb通信は遅いため，普段はコメントアウト
-            // cout << raw_val[i] << ",";
-            // raw_val[i] = 0;
+            cout << SPI_val[i] << ",";
         }
-        // cout << "\n";
-        */
+        cout << "\n";
 
         sleep_us(DELAY_US);
     }
 }
 
 int main() {
-
     stdio_init_all();
     multicore_launch_core1(core1_main);
     core0_main();
