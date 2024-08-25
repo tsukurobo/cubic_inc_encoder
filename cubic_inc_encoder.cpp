@@ -204,7 +204,7 @@ void core1_main() {
 void core0_main() {
     setup_SPI();
     multicore_fifo_clear_irq();
-
+    spi_write_blocking(SPI_PORT, (uint8_t *)SPI_val, ENC_NUM * ENC_BYTES * 2);
     while (1) {
         // コア１からデータの受け取り
         multicore_fifo_push_blocking(1);
